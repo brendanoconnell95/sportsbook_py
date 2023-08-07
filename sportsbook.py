@@ -3,6 +3,7 @@ from transaction import Transaction, Deposit, Withdraw, Check, Bet
 
 class Sportsbook:
     def __init__(self):
+        self.vigorish = 1.91
         self.connection = sqlite3.connect("bets.db")
         self.cursor = self.connection.cursor()
         self.create_tables()
@@ -79,6 +80,7 @@ class Sportsbook:
         for transaction in transactions:
             if isinstance(transaction, Deposit):
                 self.update_balance(transaction.customer_name, transaction.amount)
+            
             elif isinstance(transaction, Withdraw):
                 account_balance = self.get_account_balance(transaction.customer_name)
                 if account_balance >= transaction.amount:
@@ -87,22 +89,41 @@ class Sportsbook:
                     print(f"Insufficient balance for withdrawal: {transaction.customer_name}. "
                           f"Account Balance: ${account_balance:.2f}, Withdrawal Amount: ${transaction.amount:.2f}")
                     continue  # Skip processing this transaction
+            
             elif isinstance(transaction, Bet):
                 account_balance = self.get_account_balance(transaction.customer_name)
                 if account_balance >= transaction.amount:
                     self.record_bet(transaction)
                 else:
                     print(f"Insufficient balance for bet: {transaction.customer_name}. "
-                          f"Account Balance: ${account_balance:.2f}, Bet Amount: ${transaction.amount:.2f}")
+                          f"Account Balance: ${account_balance:.2f}, Bet Amount: ${transaction.amount:.2f}, Market: {transaction.market}, Side: {transaction.side}")
                     continue  # Skip processing this transaction
                     
             transaction.status = "processed"
+
+    def settle_market(self, market, result):
+        # Settle the bets in the given market based on the result (home or away)
+        if result not in ("home", "away"):
+            print("Invalid result. It should be 'home' or 'away'.")
+            return
+
+        market_bets = self.cursor.execute("SELECT * FROM bets WHERE market = ? AND status = 'pending'", (market,))
+        for bet in market_bets:
+            bet_id, customer_name, amount, _, side, bet_status = bet
+            if side == result:
+                amount_won = amount * self.vigorish
+                self.update_balance(customer_name, amount_won)
+                print(f"Bet ID: {bet_id}, Customer: {customer_name}, Amount Won: ${amount_won:.2f}")
+                self.cursor.execute("UPDATE bets SET status = 'won' WHERE id = ?", (bet_id,))
+            else:
+                self.cursor.execute("UPDATE bets SET status = 'lost' WHERE id = ?", (bet_id,))
+
+        self.connection.commit()
 
     def delete_all_bets(self):
         # Delete all bets from the bets table
         self.cursor.execute("DELETE FROM bets")
         self.connection.commit()
-
 
     def reset_account_balances(self):
         # Reset all account balances to 0 for all customers

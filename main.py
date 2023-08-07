@@ -40,6 +40,16 @@ if __name__ == "__main__":
     # Print account balances for all customers
     sportsbook.print_account_balances()
 
+    # Print all bets for each customer with status "pending"
+    customers = sportsbook.get_all_customers()
+    for customer in customers:
+        sportsbook.print_customer_bets(customer, status="pending")
+
+    sportsbook.settle_market("A","home")
+
+    # Print account balances for all customers
+    sportsbook.print_account_balances()
+
     # Print all bets for each customer with status "all"
     customers = sportsbook.get_all_customers()
     for customer in customers:
